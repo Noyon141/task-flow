@@ -1,7 +1,7 @@
-// ignore_for_file: curly_braces_in_flow_control_structures, deprecated_member_use
+// ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart'; // Swipe effect
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../database/database_service.dart';
@@ -16,11 +16,20 @@ class _HomeScreenState extends State<HomeScreen> {
   final DatabaseService _db = DatabaseService();
   final TextEditingController _taskCtrl = TextEditingController();
 
-  // Show "Add Task" Bottom Sheet
+  // OPTIMIZATION: Create the stream variable here
+  late Stream<List<Map<String, dynamic>>> _tasksStream;
+
+  @override
+  void initState() {
+    super.initState();
+    // OPTIMIZATION: Initialize it once to keep the connection alive
+    _tasksStream = _db.getTasksStream();
+  }
+
   void _showAddTaskDialog() {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Allow keyboard to push it up
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -50,6 +59,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 hintText: "What needs to be done?",
                 border: OutlineInputBorder(),
               ),
+              // Allow submitting by pressing "Enter" on keyboard
+              onSubmitted: (_) => _submitTask(),
             ),
             const SizedBox(height: 15),
             ElevatedButton(
@@ -57,19 +68,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 backgroundColor: Colors.indigo,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () {
-                if (_taskCtrl.text.isNotEmpty) {
-                  _db.addTask(_taskCtrl.text.trim());
-                  _taskCtrl.clear();
-                  Navigator.pop(context);
-                }
-              },
+              onPressed: _submitTask,
               child: const Text("Add Task"),
             ),
           ],
         ),
       ),
     );
+  }
+
+  void _submitTask() {
+    if (_taskCtrl.text.isNotEmpty) {
+      _db.addTask(_taskCtrl.text.trim());
+      _taskCtrl.clear();
+      Navigator.pop(context); // Close the modal immediately
+      // No need to refresh; the Stream will update the UI automatically
+    }
   }
 
   @override
@@ -97,13 +111,13 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _db.getTasksStream(),
+        stream: _tasksStream, // Use the stable stream variable
         builder: (context, snapshot) {
-          if (!snapshot.hasData)
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
 
-          final tasks = snapshot.data!;
-          if (tasks.isEmpty) {
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(
               child: Text(
                 "No tasks yet!",
@@ -112,22 +126,25 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
+          final tasks = snapshot.data!;
+
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: tasks.length,
             itemBuilder: (context, index) {
               final task = tasks[index];
               final isDone = task['is_completed'] as bool;
+              final taskId = task['id'];
 
-              // Swipe-to-Delete Wrapper
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12.0),
                 child: Slidable(
+                  key: ValueKey(taskId), // Important for performance
                   endActionPane: ActionPane(
                     motion: const ScrollMotion(),
                     children: [
                       SlidableAction(
-                        onPressed: (context) => _db.deleteTask(task['id']),
+                        onPressed: (context) => _db.deleteTask(taskId),
                         backgroundColor: Colors.red.shade400,
                         foregroundColor: Colors.white,
                         icon: Icons.delete,
@@ -155,7 +172,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         value: isDone,
-                        onChanged: (val) => _db.toggleTask(task['id'], isDone),
+                        onChanged: (val) {
+                          // The UI will update instantly via Stream when Supabase confirms the change
+                          _db.toggleTask(taskId, isDone);
+                        },
                       ),
                       title: Text(
                         task['title'],
