@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class DatabaseService {
   final _client = Supabase.instance.client;
 
-  // Get Real-time Stream of Tasks
   Stream<List<Map<String, dynamic>>> getTasksStream() {
     return _client
         .from('tasks')
