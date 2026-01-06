@@ -1,2 +1,2 @@
-const String supabaseUrl = 'YOUR_SUPABASE_URL_HERE';
-const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY_HERE';
+const String supabaseUrl = 'https://hluesrxlzmmgsgjzrbln.supabase.co';
+const String supabaseAnonKey = 'sb_publishable_OCykWDo6dLHLWM_ZyqoCCA_tYiAtJ3e';
